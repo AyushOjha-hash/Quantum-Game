@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Tic-Tac-Toe</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: system-ui, sans-serif;
+    background: #0a0a1a;
+    color: #e0e0ff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.3rem;
+    background: linear-gradient(135deg, #a78bfa, #60a5fa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .status-bar {
+    background: #12122a;
+    border: 1px solid #2d2d5e;
+    border-radius: 12px;
+    padding: 0.75rem 1.5rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+    text-align: center;
+    min-width: 320px;
+    min-height: 44px;
+    transition: all 0.3s;
+  }
+
+  .status-bar.x-turn { border-color: #a78bfa; color: #c4b5fd; }
+  .status-bar.o-turn { border-color: #60a5fa; color: #93c5fd; }
+  .status-bar.collapsing { border-color: #fbbf24; color: #fcd34d; }
+  .status-bar.winner-x { border-color: #a78bfa; background: #1e1040; color: #c4b5fd; font-weight: 600; }
+  .status-bar.winner-o { border-color: #60a5fa; background: #0c1f40; color: #93c5fd; font-weight: 600; }
+  .status-bar.draw { border-color: #6b7280; color: #9ca3af; }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 110px);
+    grid-template-rows: repeat(3, 110px);
+    gap: 8px;
+    margin-bottom: 1.5rem;
+  }
+
+  .cell {
+    background: #12122a;
+    border: 1.5px solid #2d2d5e;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    gap: 3px;
+    padding: 6px;
+    user-select: none;
+  }
+
+  .cell:hover { border-color: #4c4c8f; background: #16163a; }
+  .cell.selected-first { border-color: #a78bfa; background: #1e1040; box-shadow: 0 0 0 2px #a78bfa44; }
+  .cell.selected-second { border-color: #60a5fa; background: #0c1f40; box-shadow: 0 0 0 2px #60a5fa44; }
+  .cell.collapsed-x { border-color: #7c3aed; background: #1a0e3a; cursor: default; }
+  .cell.collapsed-o { border-color: #2563eb; background: #0c1a3a; cursor: default; }
+  .cell.collapsed-empty { cursor: default; opacity: 0.5; }
+  .cell.disabled { cursor: default; pointer-events: none; }
+
+  .token {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 6px;
+    line-height: 1.3;
+  }
+
+  .token.x-token { background: #2e1065; color: #c4b5fd; border: 1px solid #7c3aed; }
+  .token.o-token { background: #0c1f4e; color: #93c5fd; border: 1px solid #2563eb; }
+
+  .collapsed-symbol {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .collapsed-symbol.x-sym { color: #a78bfa; }
+  .collapsed-symbol.o-sym { color: #60a5fa; }
+
+  .move-hint {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 9px;
+    color: #4b5563;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  button {
+    padding: 0.55rem 1.2rem;
+    border-radius: 8px;
+    border: 1.5px solid #2d2d5e;
+    background: #12122a;
+    color: #e0e0ff;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  button:hover { border-color: #4c4c8f; background: #16163a; }
+  button:active { transform: scale(0.97); }
+
+  button.primary {
+    background: linear-gradient(135deg, #4c1d95, #1e3a8a);
+    border-color: #7c3aed;
+    color: #e0d9ff;
+    font-weight: 500;
+  }
+  button.primary:hover { border-color: #a78bfa; }
+  button:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+
+  .info-panel {
+    background: #12122a;
+    border: 1px solid #2d2d5e;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    max-width: 360px;
+    width: 100%;
+    font-size: 0.82rem;
+    color: #6b7280;
+    line-height: 1.7;
+  }
+
+  .info-panel strong { color: #9ca3af; font-weight: 500; }
+
+  .move-log {
+    margin-top: 1rem;
+    max-width: 360px;
+    width: 100%;
+  }
+
+  .move-log h3 {
+    font-size: 0.8rem;
+    color: #4b5563;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .log-entry {
+    font-size: 0.8rem;
+    color: #6b7280;
+    padding: 3px 0;
+    border-bottom: 1px solid #1a1a3a;
+  }
+
+  .log-entry .lx { color: #a78bfa; }
+  .log-entry .lo { color: #60a5fa; }
+
+  .rounds-info {
+    font-size: 0.78rem;
+    color: #4b5563;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+
+  .progress-dots {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #2d2d5e;
+    transition: all 0.3s;
+  }
+  .dot.done-x { background: #7c3aed; }
+  .dot.done-o { background: #2563eb; }
+  .dot.active { background: #fbbf24; box-shadow: 0 0 6px #fbbf2488; }
+</style>
+</head>
+<body>
+
+<h1>⚛ Quantum Tic-Tac-Toe</h1>
+<p class="subtitle">Place superposition moves across two cells · collapse to reveal the winner</p>
+
+<div class="status-bar" id="status">X's turn — click two cells for your quantum move</div>
+
+<div class="progress-dots" id="dots"></div>
+
+<div class="board" id="board"></div>
+
+<div class="controls">
+  <button class="primary" id="collapseBtn" disabled>⚛ Collapse</button>
+  <button id="resetBtn">↺ New game</button>
+</div>
+
+<div class="move-log" id="logWrap" style="display:none;">
+  <h3>Move log</h3>
+  <div id="log"></div>
+</div>
+
+<div class="info-panel">
+  <strong>How to play</strong><br>
+  Each turn, click <strong>two different cells</strong> to place a quantum move — your token exists in superposition across both. After <strong>6 rounds</strong> (3 per player), click Collapse to quantum-measure each move into one cell. The player with three in a row wins.
+</div>
+
+<script>
+const TOTAL_ROUNDS = 6;
+
+let board, moves, turn, moveNumber, phase, firstCell, gameLog;
+
+function init() {
+  board = {};
+  for (let i = 0; i < 3; i++)
+    for (let j = 0; j < 3; j++)
+      board[`${i},${j}`] = [];
+
+  moves = [];
+  turn = 'X';
+  moveNumber = 1;
+  phase = 'quantum'; // 'quantum' | 'collapsing' | 'done'
+  firstCell = null;
+  gameLog = [];
+
+  renderBoard();
+  renderDots();
+  updateStatus();
+  document.getElementById('collapseBtn').disabled = true;
+  document.getElementById('logWrap').style.display = 'none';
+  document.getElementById('log').innerHTML = '';
+}
+
+function renderBoard() {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.pos = `${i},${j}`;
+      cell.onclick = () => onCellClick(`${i},${j}`);
+
+      const tokens = board[`${i},${j}`];
+      if (tokens.length > 0) {
+        tokens.forEach(t => {
+          const span = document.createElement('span');
+          span.className = `token ${t[0] === 'X' ? 'x-token' : 'o-token'}`;
+          span.textContent = t;
+          cell.appendChild(span);
+        });
+      }
+
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function renderCollapsedBoard(chosen) {
+  const boardEl = document.getElementById('board');
+  boardEl.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      const pos = `${i},${j}`;
+      const cell = document.createElement('div');
+      const tokens = board[pos];
+
+      if (tokens.length === 1) {
+        const player = tokens[0][0];
+        cell.className = `cell disabled collapsed-${player.toLowerCase()}`;
+        const sym = document.createElement('span');
+        sym.className = `collapsed-symbol ${player.toLowerCase()}-sym`;
+        sym.textContent = player;
+        cell.appendChild(sym);
+        const sub = document.createElement('span');
+        sub.style.cssText = 'font-size:10px;color:#4b5563;';
+        sub.textContent = tokens[0];
+        cell.appendChild(sub);
+      } else {
+        cell.className = 'cell disabled collapsed-empty';
+      }
+
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function renderDots() {
+  const dotsEl = document.getElementById('dots');
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < TOTAL_ROUNDS * 2; i++) {
+    const dot = document.createElement('div');
+    const moveIdx = Math.floor(i / 2);
+    const isX = i % 2 === 0;
+    const completedMoves = moves.length;
+
+    if (moveIdx < completedMoves) {
+      dot.className = `dot ${moves[moveIdx][0][0] === 'X' ? 'done-x' : 'done-o'}`;
+    } else if (moveIdx === completedMoves && phase === 'quantum') {
+      dot.className = 'dot active';
+    } else {
+      dot.className = 'dot';
+    }
+    dotsEl.appendChild(dot);
+    if (i % 2 === 1 && i < TOTAL_ROUNDS * 2 - 1) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'width:16px;height:1px;background:#2d2d5e;align-self:center;';
+      dotsEl.appendChild(sep);
+    }
+  }
+}
+
+function updateStatus(msg, cls) {
+  const el = document.getElementById('status');
+  if (msg) {
+    el.textContent = msg;
+    el.className = `status-bar ${cls || ''}`;
+  } else {
+    if (phase === 'quantum') {
+      if (firstCell) {
+        el.textContent = `${turn} — now click the second cell (move #${moveNumber})`;
+      } else {
+        el.textContent = `${turn}'s turn — click first cell (move #${moveNumber} of ${TOTAL_ROUNDS * 2})`;
+      }
+      el.className = `status-bar ${turn.toLowerCase()}-turn`;
+    }
+  }
+}
+
+function onCellClick(pos) {
+  if (phase !== 'quantum') return;
+
+  if (!firstCell) {
+    firstCell = pos;
+    highlightCell(pos, 'selected-first');
+    updateStatus();
+  } else {
+    if (pos === firstCell) {
+      clearHighlight(firstCell);
+      firstCell = null;
+      updateStatus();
+      return;
+    }
+
+    const label = `${turn}${moveNumber}`;
+    board[firstCell].push(label);
+    board[pos].push(label);
+    moves.push([label, firstCell, pos]);
+
+    addLog(label, firstCell, pos);
+
+    const prevTurn = turn;
+    turn = turn === 'X' ? 'O' : 'X';
+    moveNumber++;
+    firstCell = null;
+
+    renderBoard();
+    renderDots();
+
+    if (moves.length >= TOTAL_ROUNDS) {
+      phase = 'ready';
+      document.getElementById('collapseBtn').disabled = false;
+      updateStatus(`All ${TOTAL_ROUNDS} quantum moves placed — collapse when ready!`, 'collapsing');
+    } else {
+      updateStatus();
+    }
+  }
+}
+
+function highlightCell(pos, cls) {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach(c => { if (c.dataset.pos === pos) c.classList.add(cls); });
+}
+
+function clearHighlight(pos) {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach(c => { if (c.dataset.pos === pos) c.classList.remove('selected-first', 'selected-second'); });
+}
+
+function addLog(label, p1, p2) {
+  const cls = label[0] === 'X' ? 'lx' : 'lo';
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="${cls}">${label}</span> → (${p1}) &amp; (${p2})`;
+  document.getElementById('log').appendChild(entry);
+  document.getElementById('logWrap').style.display = 'block';
+}
+
+function simulateQuantumChoice() {
+  return Math.random() < 0.5 ? 0 : 1;
+}
+
+function collapse() {
+  phase = 'collapsing';
+  document.getElementById('collapseBtn').disabled = true;
+  updateStatus('⚛ Collapsing quantum states...', 'collapsing');
+
+  setTimeout(() => {
+    const chosenPositions = {};
+
+    for (const [label, p1, p2] of moves) {
+      const bit = simulateQuantumChoice();
+      const chosen = bit === 0 ? p1 : p2;
+      const other  = chosen === p1 ? p2 : p1;
+      chosenPositions[label] = chosen;
+
+      const idx = board[other].indexOf(label);
+      if (idx !== -1) board[other].splice(idx, 1);
+    }
+
+    for (const pos in board) {
+      const surviving = board[pos].filter(lbl => chosenPositions[lbl] === pos);
+      if (surviving.length > 1) {
+        surviving.sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1)));
+        board[pos] = [surviving[surviving.length - 1]];
+      } else if (surviving.length === 1) {
+        board[pos] = [surviving[0]];
+      } else {
+        board[pos] = [];
+      }
+    }
+
+    renderCollapsedBoard(chosenPositions);
+
+    const winner = checkWinner();
+    const isDraw = !winner && Object.values(board).every(c => c.length === 1);
+
+    if (winner) {
+      updateStatus(`${winner} wins!`, `winner-${winner.toLowerCase()}`);
+      highlightWinningLine(winner);
+    } else if (isDraw) {
+      updateStatus("It's a draw!", 'draw');
+    } else {
+      updateStatus('Collapse complete — no winner this round.', 'draw');
+    }
+
+    phase = 'done';
+  }, 800);
+}
+
+function checkWinner() {
+  const lines = [
+    ['0,0','0,1','0,2'], ['1,0','1,1','1,2'], ['2,0','2,1','2,2'],
+    ['0,0','1,0','2,0'], ['0,1','1,1','2,1'], ['0,2','1,2','2,2'],
+    ['0,0','1,1','2,2'], ['0,2','1,1','2,0']
+  ];
+  for (const line of lines) {
+    const vals = line.map(p => board[p].length === 1 ? board[p][0][0] : null);
+    if (vals[0] && vals[0] === vals[1] && vals[1] === vals[2]) return vals[0];
+  }
+  return null;
+}
+
+function highlightWinningLine(winner) {
+  const lines = [
+    ['0,0','0,1','0,2'], ['1,0','1,1','1,2'], ['2,0','2,1','2,2'],
+    ['0,0','1,0','2,0'], ['0,1','1,1','2,1'], ['0,2','1,2','2,2'],
+    ['0,0','1,1','2,2'], ['0,2','1,1','2,0']
+  ];
+  for (const line of lines) {
+    const vals = line.map(p => board[p].length === 1 ? board[p][0][0] : null);
+    if (vals[0] && vals[0] === vals[1] && vals[1] === vals[2]) {
+      const cells = document.querySelectorAll('.cell');
+      cells.forEach(c => {
+        if (line.includes(c.dataset.pos)) {
+          c.style.boxShadow = winner === 'X'
+            ? '0 0 0 3px #a78bfa, 0 0 16px #a78bfa66'
+            : '0 0 0 3px #60a5fa, 0 0 16px #60a5fa66';
+        }
+      });
+      break;
+    }
+  }
+}
+
+document.getElementById('collapseBtn').onclick = collapse;
+document.getElementById('resetBtn').onclick = init;
+
+init();
+</script>
+</body>
+</html>
