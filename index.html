@@ -374,9 +374,15 @@ body.light::before { display: none; }
 
 <script>
 const ROUNDS = 6;
+
+// NEW or CHANGED: anti-loophole constants and state
+const MAX_QUANTUM_PER_CELL = 2;              // max labels a cell can hold in quantum phase
+const MAX_REUSE_SAME_PAIR_PER_PLAYER = 2;    // max times same pair used by same player
+
 let board, moves, turn, moveNum, phase, firstCell;
 let wX = 0, wO = 0, gameMode = '2p', soundOn = true, aiBusy = false;
 let actx = null;
+let pairReuse = {}; // key: "player|p1|p2" -> count  // NEW
 
 function ac() { if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); return actx; }
 
@@ -402,6 +408,7 @@ function init(keepScore) {
   board = {};
   for (let i=0;i<3;i++) for (let j=0;j<3;j++) board[`${i},${j}`]=[];
   moves=[]; turn='X'; moveNum=1; phase='quantum'; firstCell=null; aiBusy=false;
+  pairReuse = {}; // NEW reset reuse tracking
   if (!keepScore) { wX=0; wO=0; updScores(); }
   renderBoard(); renderProgress(); updStatus();
   document.getElementById('collapseBtn').disabled=true;
@@ -466,6 +473,13 @@ function renderBoard() {
 function onCell(pos) {
   if (phase!=='quantum'||aiBusy) return;
   if (gameMode==='ai'&&turn==='O') return;
+
+  // NEW: enforce max quantum tokens per cell
+  if (board[pos].length >= MAX_QUANTUM_PER_CELL) {
+    updStatus(`Cell ${pos} is full (max ${MAX_QUANTUM_PER_CELL} quantum moves). Choose another cell.`, 'sd');
+    return;
+  }
+
   if (!firstCell) {
     firstCell=pos;
     document.querySelector(`.cell[data-pos="${pos}"]`).classList.add('s1');
@@ -476,12 +490,32 @@ function onCell(pos) {
       document.querySelector(`.cell[data-pos="${pos}"]`).classList.remove('s1');
       firstCell=null; updStatus(); return;
     }
+
+    // NEW: enforce pair reuse limit for human players
+    if (!(gameMode==='ai' && turn==='O')) {
+      const sorted = [firstCell, pos].slice().sort();
+      const key = `${turn}|${sorted[0]}|${sorted[1]}`;
+      const used = pairReuse[key] || 0;
+      if (used >= MAX_REUSE_SAME_PAIR_PER_PLAYER) {
+        updStatus(`You already used pair (${sorted[0]} & ${sorted[1]}) ${MAX_REUSE_SAME_PAIR_PER_PLAYER} times. Pick a different combination.`, 'sd');
+        document.querySelector(`.cell[data-pos="${firstCell}"]`)?.classList.remove('s1');
+        firstCell = null;
+        return;
+      }
+    }
+
     doMove(firstCell, pos);
   }
 }
 
 function doMove(p1, p2) {
   const label=`${turn}${moveNum}`;
+
+  // NEW: update pair reuse counter for current player
+  const sorted = [p1, p2].slice().sort();
+  const key = `${turn}|${sorted[0]}|${sorted[1]}`;
+  pairReuse[key] = (pairReuse[key] || 0) + 1;
+
   board[p1].push(label); board[p2].push(label);
   moves.push([label,p1,p2]);
   sndPlace(turn==='X');
@@ -522,6 +556,10 @@ function bestAI(pos) {
   let best=-Infinity, bp1=null, bp2=null;
   for (let a=0;a<pos.length;a++) for (let b=a+1;b<pos.length;b++) {
     const p1=pos[a], p2=pos[b];
+
+    // NEW: AI respects per-cell capacity
+    if (board[p1].length >= MAX_QUANTUM_PER_CELL || board[p2].length >= MAX_QUANTUM_PER_CELL) continue;
+
     let sc=0;
     lines.forEach(ln=>{
       const in1=ln.includes(p1), in2=ln.includes(p2);
@@ -536,7 +574,23 @@ function bestAI(pos) {
     sc+=Math.random()*1.5;
     if (sc>best) { best=sc; bp1=p1; bp2=p2; }
   }
-  return [bp1||pos[0], bp2||pos[1]];
+
+  // Fallback if all pairs violated capacity
+  if (!bp1 || !bp2) {
+    const valid = pos.filter(p => board[p].length < MAX_QUANTUM_PER_CELL);
+    if (valid.length >= 2) {
+      bp1 = valid[0];
+      bp2 = valid[1];
+    } else if (valid.length === 1) {
+      bp1 = valid[0];
+      bp2 = valid[0];
+    } else {
+      bp1 = pos[0];
+      bp2 = pos[1] || pos[0];
+    }
+  }
+
+  return [bp1, bp2];
 }
 
 function collapse() {
